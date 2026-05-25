@@ -69,7 +69,9 @@ def get_locations_summary() -> dict:
         grouped.setdefault(row["location"], []).append(row)
 
     items = []
-    for location, breakdown_rows in grouped.items():
+    ordered_locations = list(dict.fromkeys([*LOCATION_LAYOUTS.keys(), *grouped.keys()]))
+    for location in ordered_locations:
+        breakdown_rows = grouped.get(location, [])
         layout = LOCATION_LAYOUTS.get(location, {"x_ratio": 0.5, "y_ratio": 0.5})
         total_cabinets = sum(int(row["total_cabinets"] or 0) for row in breakdown_rows)
         rentable_cabinets = sum(int(row["rentable_cabinets"] or 0) for row in breakdown_rows)
