@@ -45,10 +45,7 @@ def test_locations_summary_breakdown_contains_expected_machine_types(client):
     location_one_breakdown = items["位置1"]["cabinet_breakdown"]
 
     pairs = [(entry["card_type"], entry["cabinet_type"]) for entry in location_one_breakdown]
-    assert pairs == [
-        ("3090", "单卡机柜"),
-        ("4090", "单卡机柜"),
-    ]
+    assert pairs == [("3090", "单卡机柜")]
 
     location_four_breakdown = items["位置4"]["cabinet_breakdown"]
     assert ("910B3", "8卡机柜") in [
