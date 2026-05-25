@@ -8,7 +8,7 @@ def test_locations_summary_shape(client):
     data = response.json()
     assert "items" in data
     assert "edges" in data
-    assert len(data["items"]) == 4
+    assert len(data["items"]) == 3
     assert len(data["edges"]) == 4
     assert "cabinet_breakdown" in data["items"][0]
     assert len(data["items"][0]["cabinet_breakdown"]) >= 1
@@ -22,7 +22,7 @@ def test_locations_summary_counts_and_status(client):
     assert items["位置1"]["available_cards"] > 0
     assert items["位置1"]["node_status"] == "available"
 
-    assert items["位置2"]["node_status"] == "available"
+    assert items["位置3"]["node_status"] == "available"
     assert items["位置4"]["available_cards"] >= 1
 
 

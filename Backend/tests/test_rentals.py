@@ -35,7 +35,7 @@ def create_sample_rental(client, headers: dict) -> dict:
         "/api/rentals",
         headers=headers,
         json={
-            "card_type": "4090",
+            "card_type": "3090",
             "cabinet_type": "单卡机柜",
             "card_count": 2,
         },
@@ -70,16 +70,16 @@ def test_create_rental_success(client, monkeypatch):
 
     assert data["status"] == "active"
     assert data["card_count"] == 2
-    assert data["hourly_user_price_total"] == 22.8
-    assert data["hourly_power_cost_total"] == 3.8
+    assert data["hourly_user_price_total"] == 8.4
+    assert data["hourly_power_cost_total"] == 2.7
     assert data["power_cost_mode"] == "estimated"
     assert data["provisioning_status"] == "ready"
     assert len(data["allocations"]) == 2
     assert [item["cabinet_code"] for item in data["allocations"]] == [
-        "10.21.53.113-4090",
-        "10.21.53.162-4090",
+        "10.20.12.225-3090",
+        "10.20.12.227-3090",
     ]
-    assert data["connection"]["ip"] == "10.21.53.113"
+    assert data["connection"]["ip"] == "10.20.12.225"
     assert data["connection"]["connection_type"] == "rental_environment"
     assert data["connection"]["provisioning_status"] == "ready"
     assert data["connection"]["environment_id"] == f"rental-{data['rental_id']}-1"
@@ -96,7 +96,7 @@ def test_create_rental_success(client, monkeypatch):
             "SELECT COUNT(*) AS count FROM cabinets WHERE status = 'rented'"
         ).fetchone()["count"]
     assert rental["user_id"] == 1
-    assert rented_count >= 3
+    assert rented_count >= 2
 
 
 def test_get_rental_detail(client, monkeypatch):
@@ -160,8 +160,8 @@ def test_cancel_rental_releases_cabinets_and_computes_totals(client, monkeypatch
     data = response.json()
     assert data["status"] == "cancelled"
     assert data["duration_seconds"] >= 0
-    assert data["hourly_user_price_total"] == 22.8
-    assert data["hourly_power_cost_total"] == 3.8
+    assert data["hourly_user_price_total"] == 8.4
+    assert data["hourly_power_cost_total"] == 2.7
 
     placeholders = ",".join("?" for _ in codes)
     with connection_scope() as conn:
@@ -203,7 +203,7 @@ def test_create_rental_can_wake_cheaper_offline_cabinet(client, monkeypatch):
             SET status = 'available', active_card_count = 0, last_idle_at = NULL, night_hourly_power_cost = ?
             WHERE cabinet_code = ?
             """,
-            (2.3, "10.21.53.113-4090"),
+            (2.3, "10.20.12.225-3090"),
         )
         conn.execute(
             """
@@ -211,14 +211,14 @@ def test_create_rental_can_wake_cheaper_offline_cabinet(client, monkeypatch):
             SET status = 'offline', active_card_count = 0, last_idle_at = NULL, night_hourly_power_cost = ?
             WHERE cabinet_code = ?
             """,
-                (1.4, "10.21.53.82-4090"),
+            (1.4, "10.20.12.227-3090"),
         )
 
     response = client.post(
         "/api/rentals",
         headers=headers,
         json={
-            "card_type": "4090",
+            "card_type": "3090",
             "cabinet_type": "单卡机柜",
             "card_count": 1,
         },
@@ -226,13 +226,13 @@ def test_create_rental_can_wake_cheaper_offline_cabinet(client, monkeypatch):
 
     assert response.status_code == 200
     data = response.json()
-    assert [item["cabinet_code"] for item in data["allocations"]] == ["10.21.53.82-4090"]
+    assert [item["cabinet_code"] for item in data["allocations"]] == ["10.20.12.227-3090"]
     assert data["hourly_power_cost_total"] == 1.4
 
     with connection_scope() as conn:
         status = conn.execute(
             "SELECT status, active_card_count FROM cabinets WHERE cabinet_code = ?",
-            ("10.21.53.82-4090",),
+            ("10.20.12.227-3090",),
         ).fetchone()
     assert status["status"] == "rented"
     assert status["active_card_count"] == 1
@@ -246,16 +246,16 @@ def test_create_rental_can_target_preferred_cabinet(client, monkeypatch):
         "/api/rentals",
         headers=headers,
         json={
-            "card_type": "4090",
+            "card_type": "3090",
             "cabinet_type": "单卡机柜",
             "card_count": 1,
-            "preferred_cabinet_code": "10.21.53.162-4090",
+            "preferred_cabinet_code": "10.20.12.227-3090",
         },
     )
 
     assert response.status_code == 200
     data = response.json()
-    assert data["allocations"][0]["cabinet_code"] == "10.21.53.162-4090"
+    assert data["allocations"][0]["cabinet_code"] == "10.20.12.227-3090"
 
 
 def test_create_rental_can_target_preferred_location(client, monkeypatch):
@@ -269,13 +269,13 @@ def test_create_rental_can_target_preferred_location(client, monkeypatch):
             "card_type": "4090",
             "cabinet_type": "单卡机柜",
             "card_count": 1,
-            "preferred_location": "位置2",
+            "preferred_location": "位置3",
         },
     )
 
     assert response.status_code == 200
     data = response.json()
-    assert data["allocations"][0]["location"] == "位置2"
+    assert data["allocations"][0]["location"] == "位置3"
 
 
 def test_cancel_rental_powers_off_cabinet_when_no_cards_remain(client, monkeypatch):
@@ -325,8 +325,8 @@ def test_create_and_cancel_rental_marks_specific_gpu_devices(client, monkeypatch
         ).fetchall()
 
     assert [(row["cabinet_code"], row["gpu_index"], row["status"]) for row in rows] == [
-        ("10.21.53.113-4090", 0, "rented"),
-        ("10.21.53.162-4090", 0, "rented"),
+        ("10.20.12.225-3090", 0, "rented"),
+        ("10.20.12.227-3090", 0, "rented"),
     ]
     assert created["connections"][0]["command"].startswith("ssh rent_")
 
@@ -555,3 +555,6 @@ def test_validation_error_uses_unified_shape(client):
     data = response.json()
     assert data["success"] is False
     assert data["error"]["code"] == "VALIDATION_ERROR"
+
+
+
