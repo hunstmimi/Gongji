@@ -82,6 +82,10 @@ class DockerRuntime:
                 f"SSH_USERNAME={payload.username}",
                 "-e",
                 f"SSH_PASSWORD={payload.password}",
+                "-e",
+                f"CUDA_VISIBLE_DEVICES={','.join(str(item) for item in payload.gpu_indices)}",
+                "-e",
+                f"NVIDIA_VISIBLE_DEVICES={','.join(str(item) for item in payload.gpu_indices)}",
                 payload.image,
             ]
         )

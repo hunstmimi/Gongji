@@ -114,6 +114,14 @@ def resolve_agent_default_image() -> str:
     return os.getenv("COMPUTE_RENTAL_AGENT_DEFAULT_IMAGE") or "gongji/ascend-ssh:latest"
 
 
+def resolve_agent_nvidia_image() -> str:
+    return os.getenv("COMPUTE_RENTAL_AGENT_NVIDIA_IMAGE") or "gongji/nvidia-ssh:latest"
+
+
+def resolve_agent_ascend_image() -> str:
+    return os.getenv("COMPUTE_RENTAL_AGENT_ASCEND_IMAGE") or resolve_agent_default_image()
+
+
 def resolve_cpu_per_card() -> float:
     raw = (os.getenv("COMPUTE_RENTAL_CPU_PER_CARD") or "").strip()
     if not raw:

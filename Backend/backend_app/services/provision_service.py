@@ -6,8 +6,10 @@ from urllib import request as urllib_request
 
 from ..config import (
     resolve_agent_base_url,
+    resolve_agent_ascend_image,
     resolve_agent_default_image,
     resolve_agent_dry_run,
+    resolve_agent_nvidia_image,
     resolve_agent_port,
     resolve_agent_token,
     resolve_cpu_per_card,
@@ -56,6 +58,15 @@ def _agent_base_url(host_ip: str | None = None) -> str | None:
     return f"http://{host_ip}:{resolve_agent_port()}"
 
 
+def _image_for_allocation(allocation: dict) -> str:
+    card_type = str(allocation.get("card_type") or "").lower()
+    if "910" in card_type or "ascend" in card_type:
+        return resolve_agent_ascend_image()
+    if card_type in {"3090", "4090"} or "nvidia" in card_type:
+        return resolve_agent_nvidia_image()
+    return resolve_agent_default_image()
+
+
 def create_instance(rental_id: int, allocation: dict, allocation_index: int = 0) -> dict:
     gpu_indices = allocation.get("device_indices") or []
     allocated_cards = int(allocation.get("allocated_cards") or len(gpu_indices) or 1)
@@ -68,7 +79,7 @@ def create_instance(rental_id: int, allocation: dict, allocation_index: int = 0)
         "instance_id": _environment_id(rental_id, allocation_index),
         "container_name": _environment_id(rental_id, allocation_index),
         "gpu_indices": gpu_indices,
-        "image": resolve_agent_default_image(),
+        "image": _image_for_allocation(allocation),
         "username": username,
         "password": password,
         "ssh_port": port,
