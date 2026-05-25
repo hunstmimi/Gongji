@@ -174,7 +174,10 @@ def get_runtime():
 
 
 def _run(command: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError as exc:
+        result = subprocess.CompletedProcess(command, 127, "", str(exc))
     if check and result.returncode != 0:
         raise RuntimeErrorResponse(result.stderr.strip() or "command failed")
     return result
