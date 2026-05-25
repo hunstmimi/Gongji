@@ -2,8 +2,10 @@
 
 from datetime import datetime
 
-from backend_app.db import connection_scope, transaction
 from backend_app.config import TIMEZONE
+from backend_app.db import connection_scope, transaction
+from backend_app.errors import AppError
+from backend_app.services import provision_service
 
 
 def patch_now(monkeypatch, *datetimes: datetime) -> None:
@@ -119,16 +121,16 @@ def test_create_rental_no_available_cabinets_returns_unified_error(client, monke
         "/api/rentals",
         headers=headers,
         json={
-            "card_type": "V100X2",
-            "cabinet_type": "单卡机柜",
-            "card_count": 2,
+            "card_type": "910B3",
+            "cabinet_type": "8卡机柜",
+            "card_count": 5,
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 400
     data = response.json()
     assert data["success"] is False
-    assert data["error"]["code"] == "NO_AVAILABLE_CARDS"
+    assert data["error"]["code"] == "INVALID_CARD_COUNT"
 
 
 def test_get_missing_rental_returns_unified_404(client):
@@ -236,6 +238,46 @@ def test_create_rental_can_wake_cheaper_offline_cabinet(client, monkeypatch):
     assert status["active_card_count"] == 1
 
 
+def test_create_rental_can_target_preferred_cabinet(client, monkeypatch):
+    patch_now(monkeypatch, datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE))
+    headers = login_headers(client)
+
+    response = client.post(
+        "/api/rentals",
+        headers=headers,
+        json={
+            "card_type": "4090",
+            "cabinet_type": "单卡机柜",
+            "card_count": 1,
+            "preferred_cabinet_code": "10.20.12.248-4090",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["allocations"][0]["cabinet_code"] == "10.20.12.248-4090"
+
+
+def test_create_rental_can_target_preferred_location(client, monkeypatch):
+    patch_now(monkeypatch, datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE))
+    headers = login_headers(client)
+
+    response = client.post(
+        "/api/rentals",
+        headers=headers,
+        json={
+            "card_type": "4090",
+            "cabinet_type": "单卡机柜",
+            "card_count": 1,
+            "preferred_location": "位置2",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["allocations"][0]["location"] == "位置2"
+
+
 def test_cancel_rental_powers_off_cabinet_when_no_cards_remain(client, monkeypatch):
     patch_now(
         monkeypatch,
@@ -258,6 +300,243 @@ def test_cancel_rental_powers_off_cabinet_when_no_cards_remain(client, monkeypat
         ).fetchall()
     assert [row["status"] for row in rows] == ["offline", "offline"]
     assert all(row["active_card_count"] == 0 for row in rows)
+
+
+def test_create_and_cancel_rental_marks_specific_gpu_devices(client, monkeypatch):
+    patch_now(
+        monkeypatch,
+        datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE),
+        datetime(2026, 4, 30, 20, 30, tzinfo=TIMEZONE),
+    )
+    headers = login_headers(client)
+    created = create_sample_rental(client, headers)
+    rental_id = created["rental_id"]
+
+    with connection_scope() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.cabinet_code, g.gpu_index, g.status, g.rental_id
+            FROM gpu_devices g
+            JOIN cabinets c ON c.id = g.cabinet_id
+            WHERE g.rental_id = ?
+            ORDER BY c.cabinet_code, g.gpu_index
+            """,
+            (rental_id,),
+        ).fetchall()
+
+    assert [(row["cabinet_code"], row["gpu_index"], row["status"]) for row in rows] == [
+        ("10.21.53.156-4090", 0, "rented"),
+        ("10.21.53.162-4090", 0, "rented"),
+    ]
+    assert created["connections"][0]["command"].startswith("ssh rent_")
+
+    response = client.post(f"/api/rentals/{rental_id}/cancel", headers=headers)
+    assert response.status_code == 200
+
+    with connection_scope() as conn:
+        remaining = conn.execute(
+            "SELECT COUNT(*) AS count FROM gpu_devices WHERE rental_id = ?",
+            (rental_id,),
+        ).fetchone()["count"]
+    assert remaining == 0
+
+
+def test_create_910b3_multi_card_rental_allocates_single_node_indices(client, monkeypatch):
+    patch_now(monkeypatch, datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE))
+    headers = login_headers(client)
+
+    response = client.post(
+        "/api/rentals",
+        headers=headers,
+        json={
+            "card_type": "910B3",
+            "cabinet_type": "8卡机柜",
+            "card_count": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["card_count"] == 3
+    assert data["hourly_user_price_total"] == 22.8
+    assert len(data["allocations"]) == 1
+    allocation = data["allocations"][0]
+    assert allocation["cabinet_code"] == "10.26.6.48-910B3"
+    assert allocation["device_indices"] == [0, 1, 2]
+    assert data["connection"]["command"].startswith("ssh rent_")
+
+    with connection_scope() as conn:
+        rows = conn.execute(
+            """
+            SELECT gpu_index, status, rental_id
+            FROM gpu_devices
+            WHERE cabinet_id = (
+                SELECT id FROM cabinets WHERE cabinet_code = '10.26.6.48-910B3'
+            )
+            ORDER BY gpu_index
+            """,
+        ).fetchall()
+
+    assert [(row["gpu_index"], row["status"]) for row in rows] == [
+        (0, "rented"),
+        (1, "rented"),
+        (2, "rented"),
+        (3, "available"),
+        (4, "disabled"),
+        (5, "disabled"),
+        (6, "disabled"),
+        (7, "disabled"),
+    ]
+
+
+def test_create_910b3_four_card_rental_never_allocates_disabled_devices(client, monkeypatch):
+    patch_now(monkeypatch, datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE))
+    headers = login_headers(client)
+
+    response = client.post(
+        "/api/rentals",
+        headers=headers,
+        json={
+            "card_type": "910B3",
+            "cabinet_type": "8卡机柜",
+            "card_count": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["allocations"][0]["device_indices"] == [0, 1, 2, 3]
+    assert data["connection"]["visible_devices"] == "0,1,2,3"
+
+
+def test_create_910b3_five_card_rental_rejected_by_backend_limit(client, monkeypatch):
+    patch_now(monkeypatch, datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE))
+    headers = login_headers(client)
+
+    response = client.post(
+        "/api/rentals",
+        headers=headers,
+        json={
+            "card_type": "910B3",
+            "cabinet_type": "8卡机柜",
+            "card_count": 5,
+        },
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == "INVALID_CARD_COUNT"
+
+
+def test_node_heartbeat_marks_unknown_occupied_devices_unrentable(client, monkeypatch):
+    patch_now(monkeypatch, datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE))
+    response = client.post(
+        "/api/nodes/heartbeat",
+        headers={"Authorization": "Bearer local-agent-token"},
+        json={
+            "node_id": "sribd-910b3-01",
+            "host_ip": "10.26.6.48",
+            "accelerator_type": "ascend",
+            "devices": [
+                {"index": 0, "name": "910B3", "health": "OK", "process_count": 1, "hbm_used_mb": 12000, "hbm_total_mb": 65536},
+                {"index": 1, "name": "910B3", "health": "OK", "process_count": 0, "hbm_used_mb": 3400, "hbm_total_mb": 65536},
+                {"index": 2, "name": "910B3", "health": "OK", "process_count": 0, "hbm_used_mb": 3400, "hbm_total_mb": 65536},
+                {"index": 3, "name": "910B3", "health": "OK", "process_count": 0, "hbm_used_mb": 3400, "hbm_total_mb": 65536},
+            ],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["updated_devices"] == 4
+
+    cards = client.get("/api/cards").json()["items"]
+    option_910b3 = next(item for item in cards if item["card_type"] == "910B3")["pricing_options"][0]
+    assert option_910b3["available_cards"] == 3
+    assert option_910b3["max_card_count"] == 3
+
+    headers = login_headers(client)
+    rental_response = client.post(
+        "/api/rentals",
+        headers=headers,
+        json={
+            "card_type": "910B3",
+            "cabinet_type": "8卡机柜",
+            "card_count": 2,
+        },
+    )
+    assert rental_response.status_code == 200
+    allocation = rental_response.json()["allocations"][0]
+    assert allocation["device_indices"] == [1, 2]
+
+
+def test_provision_payload_scales_cpu_memory_and_shm_by_card_count(monkeypatch):
+    monkeypatch.setenv("COMPUTE_RENTAL_AGENT_DRY_RUN", "true")
+    monkeypatch.setenv("COMPUTE_RENTAL_CPU_PER_CARD", "6")
+    monkeypatch.setenv("COMPUTE_RENTAL_MEMORY_PER_CARD_GB", "48")
+    monkeypatch.setenv("COMPUTE_RENTAL_SHM_PER_CARD_GB", "12")
+
+    payload = provision_service.create_instance(
+        88,
+        {
+            "cabinet_code": "10.26.6.48-910B3",
+            "host_ip": "10.26.6.48",
+            "device_indices": [1, 2],
+            "allocated_cards": 2,
+        },
+        0,
+    )
+
+    assert payload["cpu_limit"] == 12
+    assert payload["memory_limit_gb"] == 96
+    assert payload["shm_size"] == "24g"
+
+
+def test_provisioning_failure_releases_reserved_devices(client, monkeypatch):
+    patch_now(monkeypatch, datetime(2026, 4, 30, 20, 0, tzinfo=TIMEZONE))
+
+    def fail_create_instance(*_args, **_kwargs):
+        raise AppError("AGENT_REQUEST_FAILED", "节点 Agent 调用失败", 502)
+
+    monkeypatch.setattr("backend_app.services.rental_service.create_instance", fail_create_instance)
+    headers = login_headers(client)
+    response = client.post(
+        "/api/rentals",
+        headers=headers,
+        json={
+            "card_type": "910B3",
+            "cabinet_type": "8卡机柜",
+            "card_count": 2,
+        },
+    )
+
+    assert response.status_code == 502
+    with connection_scope() as conn:
+        rows = conn.execute(
+            """
+            SELECT gpu_index, status, rental_id
+            FROM gpu_devices
+            WHERE cabinet_id = (
+                SELECT id FROM cabinets WHERE cabinet_code = '10.26.6.48-910B3'
+            )
+            ORDER BY gpu_index
+            """,
+        ).fetchall()
+        failed_rental = conn.execute(
+            "SELECT status, stop_reason FROM rentals WHERE card_type = '910B3' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+
+    assert [(row["gpu_index"], row["status"], row["rental_id"]) for row in rows] == [
+        (0, "available", None),
+        (1, "available", None),
+        (2, "available", None),
+        (3, "available", None),
+        (4, "disabled", None),
+        (5, "disabled", None),
+        (6, "disabled", None),
+        (7, "disabled", None),
+    ]
+    assert failed_rental["status"] == "cancelled"
+    assert failed_rental["stop_reason"] == "provisioning_failed"
 
 
 def test_validation_error_uses_unified_shape(client):

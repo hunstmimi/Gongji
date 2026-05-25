@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..db import connection_scope, transaction
+from ..db import transaction
 from ..errors import AppError
 from ..security import generate_access_token, hash_password, verify_password
 from ..utils import mask_phone, now_iso, round2
@@ -15,6 +15,7 @@ def serialize_user(user: dict) -> dict:
         "avatar_url": user.get("avatar_url"),
         "balance": round2(float(user["balance"])),
         "status": user["status"],
+        "role": user.get("role") or "user",
     }
 
 
@@ -43,8 +44,8 @@ def register_user(username: str, password: str, phone: str | None, nickname: str
         user_id = conn.execute_insert(
             """
             INSERT INTO users (
-                username, password_hash, phone, nickname, avatar_url, balance, status
-            ) VALUES (?, ?, ?, ?, NULL, 0, 'active')
+                username, password_hash, phone, nickname, avatar_url, balance, status, role
+            ) VALUES (?, ?, ?, ?, NULL, 0, 'active', 'user')
             """,
             (username, hash_password(password), phone, safe_nickname),
         )

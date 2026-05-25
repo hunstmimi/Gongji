@@ -4,6 +4,7 @@ import CatalogPage from "../pages/CatalogPage";
 import ResultPage from "../pages/ResultPage";
 import AuthPage from "../pages/AuthPage";
 import ProfilePage from "../pages/ProfilePage";
+import AdminPage from "../pages/AdminPage";
 import ProtectedRoute from "../components/layout/ProtectedRoute";
 
 export default function AppRouter() {
@@ -32,6 +33,14 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <AdminPage />
           </ProtectedRoute>
         }
       />

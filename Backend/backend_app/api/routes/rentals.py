@@ -17,6 +17,8 @@ def create_rental_route(payload: CreateRentalRequest, user: dict = Depends(get_c
         card_type=payload.card_type,
         cabinet_type=payload.cabinet_type,
         card_count=payload.card_count,
+        preferred_cabinet_code=payload.preferred_cabinet_code,
+        preferred_location=payload.preferred_location,
     )
 
 

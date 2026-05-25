@@ -21,6 +21,18 @@ def test_login_returns_masked_phone_and_balance(client):
     data = response.json()
     assert data["user"]["phone_masked"] == "158****0746"
     assert data["user"]["balance"] == 286.4
+    assert data["user"]["role"] == "user"
+
+
+def test_admin_seed_user_can_login(client):
+    response = client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "Admin@2026"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user"]["role"] == "admin"
 
 
 def test_dashboard_returns_empty_active_and_seeded_history(client):

@@ -14,10 +14,17 @@ export default function HeaderUserSection() {
   }
 
   return (
-    <button className="user-mini-card" onClick={() => navigate("/me")}>
-      <span className="user-mini-line" />
-      <strong>{user.phone_masked}</strong>
-      <span>{user.username}</span>
-    </button>
+    <div className="user-header-actions">
+      {user.role === "admin" ? (
+        <Link className="admin-mini-link" to="/admin">
+          后台管理
+        </Link>
+      ) : null}
+      <button className="user-mini-card" onClick={() => navigate("/me")} type="button">
+        <span className="user-mini-line" />
+        <strong>{user.phone_masked}</strong>
+        <span>{user.nickname || user.username}</span>
+      </button>
+    </div>
   );
 }

@@ -15,11 +15,14 @@ TABLES = [
     "card_products",
     "user_price_configs",
     "cabinets",
+    "gpu_devices",
     "users",
     "user_balance_transactions",
     "user_sessions",
     "rentals",
     "rental_allocations",
+    "node_heartbeats",
+    "node_device_reports",
 ]
 
 
@@ -27,6 +30,12 @@ def load_sqlite_rows(db_path: Path, table_name: str) -> list[dict]:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        if not exists:
+            return []
         rows = conn.execute(f"SELECT * FROM {table_name} ORDER BY id ASC").fetchall()
         return [dict(row) for row in rows]
     finally:
@@ -47,7 +56,23 @@ def migrate() -> None:
 
     with connect(database_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE rental_allocations, rentals, user_sessions, user_balance_transactions, users, cabinets, user_price_configs, card_products RESTART IDENTITY CASCADE")
+            cur.execute(
+                """
+                TRUNCATE
+                    node_device_reports,
+                    node_heartbeats,
+                    rental_allocations,
+                    rentals,
+                    user_sessions,
+                    user_balance_transactions,
+                    users,
+                    gpu_devices,
+                    cabinets,
+                    user_price_configs,
+                    card_products
+                RESTART IDENTITY CASCADE
+                """
+            )
 
             for table_name in TABLES:
                 rows = load_sqlite_rows(sqlite_path, table_name)

@@ -84,3 +84,61 @@ def resolve_rental_ssh_port_base() -> int:
 
 def resolve_rental_ssh_password_seed() -> str:
     return os.getenv("COMPUTE_RENTAL_SSH_PASSWORD_SEED") or "local-demo-rental-secret"
+
+
+def resolve_agent_base_url() -> str | None:
+    value = (os.getenv("COMPUTE_RENTAL_AGENT_BASE_URL") or "").strip().rstrip("/")
+    return value or None
+
+
+def resolve_agent_port() -> int:
+    raw = (os.getenv("COMPUTE_RENTAL_AGENT_PORT") or "").strip()
+    if not raw:
+        return 18080
+    try:
+        return min(max(int(raw), 1), 65535)
+    except ValueError:
+        return 18080
+
+
+def resolve_agent_token() -> str:
+    return os.getenv("COMPUTE_RENTAL_AGENT_TOKEN") or "local-agent-token"
+
+
+def resolve_agent_dry_run() -> bool:
+    value = (os.getenv("COMPUTE_RENTAL_AGENT_DRY_RUN") or "true").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def resolve_agent_default_image() -> str:
+    return os.getenv("COMPUTE_RENTAL_AGENT_DEFAULT_IMAGE") or "gongji/ascend-ssh:latest"
+
+
+def resolve_cpu_per_card() -> float:
+    raw = (os.getenv("COMPUTE_RENTAL_CPU_PER_CARD") or "").strip()
+    if not raw:
+        return 8.0
+    try:
+        return max(0.1, float(raw))
+    except ValueError:
+        return 8.0
+
+
+def resolve_memory_per_card_gb() -> int:
+    raw = (os.getenv("COMPUTE_RENTAL_MEMORY_PER_CARD_GB") or "").strip()
+    if not raw:
+        return 64
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 64
+
+
+def resolve_shm_per_card_gb() -> int:
+    raw = (os.getenv("COMPUTE_RENTAL_SHM_PER_CARD_GB") or "").strip()
+    if not raw:
+        return 16
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 16

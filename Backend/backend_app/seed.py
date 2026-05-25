@@ -20,7 +20,8 @@ LOCATION_EDGES = [
 CARD_TYPE_ORDER = {
     "3090": 1,
     "4090": 2,
-    "V100X2": 3,
+    "910B3": 3,
+    "V100X2": 4,
 }
 
 CARD_PRODUCTS = [
@@ -43,12 +44,12 @@ CARD_PRODUCTS = [
         "display_price": "单卡 12.0元/小时起",
     },
     {
-        "card_type": "V100X2",
-        "title": "V100X2",
-        "cabinet_desc": "单卡机柜",
-        "vram": "32G",
-        "cpu": "24核",
-        "memory": "96G",
+        "card_type": "910B3",
+        "title": "Ascend 910B3",
+        "cabinet_desc": "8卡机柜",
+        "vram": "64G HBM",
+        "cpu": "鲲鹏多核",
+        "memory": "按实例分配",
         "display_price": "单卡 8.0元/小时起",
     },
 ]
@@ -56,7 +57,7 @@ CARD_PRODUCTS = [
 USER_PRICE_CONFIGS = [
     {"card_type": "3090", "cabinet_type": "单卡机柜", "hourly_user_price": 4.5, "enabled": 1},
     {"card_type": "4090", "cabinet_type": "单卡机柜", "hourly_user_price": 12.0, "enabled": 1},
-    {"card_type": "V100X2", "cabinet_type": "单卡机柜", "hourly_user_price": 8.0, "enabled": 1},
+    {"card_type": "910B3", "cabinet_type": "8卡机柜", "hourly_user_price": 8.0, "enabled": 1},
 ]
 
 DEFAULT_USERS = [
@@ -68,6 +69,17 @@ DEFAULT_USERS = [
         "avatar_url": None,
         "balance": 286.40,
         "status": "active",
+        "role": "user",
+    },
+    {
+        "username": "admin",
+        "password_hash": "seeded-admin-001:9abd69b199a66395013704f1243b59611fc93feeb510692a05cdfc20c226e9f3",
+        "phone": "18700004352",
+        "nickname": "管理员",
+        "avatar_url": None,
+        "balance": 0,
+        "status": "active",
+        "role": "admin",
     }
 ]
 
@@ -119,6 +131,7 @@ class CabinetSeed:
     status: str
     host_ip: str
     ssh_port: int = 22
+    allowed_device_indices: tuple[int, ...] | None = None
 
 
 CABINET_SEEDS = [
@@ -134,7 +147,18 @@ CABINET_SEEDS = [
     CabinetSeed("10.21.53.142-4090", "位置3", "4090", "单卡机柜", 1, 2.9, 2.5, "rented", "10.21.53.142"),
     CabinetSeed("10.21.53.156-4090", "位置3", "4090", "单卡机柜", 1, 2.3, 1.9, "offline", "10.21.53.156"),
     CabinetSeed("10.21.53.162-4090", "位置3", "4090", "单卡机柜", 1, 2.2, 1.8, "available", "10.21.53.162"),
-    CabinetSeed("10.26.6.117-V100X2", "位置4", "V100X2", "单卡机柜", 1, 1.9, 1.6, "available", "10.26.6.117"),
+    CabinetSeed(
+        "10.26.6.48-910B3",
+        "位置4",
+        "910B3",
+        "8卡机柜",
+        8,
+        16.0,
+        12.8,
+        "offline",
+        "10.26.6.48",
+        allowed_device_indices=(0, 1, 2, 3),
+    ),
 ]
 
 PRICE_RULES = {
@@ -152,13 +176,20 @@ PRICE_RULES = {
         "preview_max": 8,
         "allocation_policy": "spread",
     },
-    ("V100X2", "单卡机柜"): {
+    ("910B3", "8卡机柜"): {
         "single_total": 8.0,
         "bulk_per_card": 7.6,
         "min_card_count": 1,
-        "preview_max": 2,
-        "allocation_policy": "spread",
+        "preview_max": 4,
+        "allocation_policy": "same_cabinet_required",
     },
+}
+
+
+CABINET_DEVICE_POLICY = {
+    item.cabinet_code: item.allowed_device_indices
+    for item in CABINET_SEEDS
+    if item.allowed_device_indices is not None
 }
 
 
@@ -187,6 +218,13 @@ def get_preview_max(card_type: str, cabinet_type: str) -> int:
 
 def get_allocation_policy(card_type: str, cabinet_type: str) -> str:
     return str(get_price_rule(card_type, cabinet_type).get("allocation_policy", "spread"))
+
+
+def get_allowed_device_indices(cabinet_code: str, capacity_cards: int) -> set[int]:
+    configured = CABINET_DEVICE_POLICY.get(cabinet_code)
+    if configured is None:
+        return set(range(capacity_cards))
+    return {index for index in configured if 0 <= index < capacity_cards}
 
 
 def get_hourly_user_price_total(card_type: str, cabinet_type: str, card_count: int) -> float:

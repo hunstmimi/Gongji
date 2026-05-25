@@ -20,5 +20,12 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict:
     return get_current_user_by_token(token)
 
 
+def get_current_admin_user(authorization: str | None = Header(default=None)) -> dict:
+    user = get_current_user(authorization)
+    if user.get("role") != "admin":
+        raise AppError("FORBIDDEN", "只有管理员可以访问后台", 403)
+    return user
+
+
 def get_current_token(authorization: str | None = Header(default=None)) -> str:
     return _extract_bearer_token(authorization)

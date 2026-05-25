@@ -10,7 +10,14 @@ from psycopg import connect
 from psycopg.rows import dict_row
 
 from .config import resolve_database_url, resolve_db_path
-from .seed import CARD_PRODUCTS, DEFAULT_HISTORY_RENTALS, DEFAULT_USERS, USER_PRICE_CONFIGS, build_cabinets
+from .seed import (
+    CARD_PRODUCTS,
+    DEFAULT_HISTORY_RENTALS,
+    DEFAULT_USERS,
+    USER_PRICE_CONFIGS,
+    build_cabinets,
+    get_allowed_device_indices,
+)
 from .utils import cabinet_status_from_active_cards
 
 
@@ -142,6 +149,7 @@ def init_db() -> None:
         _migrate_schema(conn)
         _seed_if_empty(conn)
         _sync_seed_reference_data(conn)
+        _sync_gpu_devices_from_cabinets(conn)
         conn.commit()
 
 
@@ -190,6 +198,27 @@ def _schema_statements(backend: str) -> list[str]:
         )
         """,
         f"""
+        CREATE TABLE IF NOT EXISTS gpu_devices (
+            id {identity},
+            cabinet_id INTEGER NOT NULL,
+            gpu_index INTEGER NOT NULL,
+            gpu_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available', 'rented', 'disabled')),
+            rental_id INTEGER,
+            observed_status TEXT NOT NULL DEFAULT 'unknown',
+            health TEXT,
+            usage_percent REAL,
+            memory_used_mb INTEGER,
+            memory_total_mb INTEGER,
+            process_count INTEGER NOT NULL DEFAULT 0,
+            last_seen_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(cabinet_id, gpu_index),
+            FOREIGN KEY(cabinet_id) REFERENCES cabinets(id) ON DELETE CASCADE
+        )
+        """,
+        f"""
         CREATE TABLE IF NOT EXISTS users (
             id {identity},
             username TEXT NOT NULL UNIQUE,
@@ -198,6 +227,7 @@ def _schema_statements(backend: str) -> list[str]:
             nickname TEXT NOT NULL,
             avatar_url TEXT,
             balance REAL NOT NULL DEFAULT 0,
+            role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'admin')),
             status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'disabled')),
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -257,10 +287,51 @@ def _schema_statements(backend: str) -> list[str]:
             cabinet_id INTEGER NOT NULL,
             allocated_cards INTEGER NOT NULL DEFAULT 1,
             device_indices TEXT,
+            instance_id TEXT,
+            container_name TEXT,
+            ssh_host TEXT,
+            ssh_port INTEGER,
+            ssh_username TEXT,
+            ssh_password TEXT,
+            ssh_command TEXT,
+            provisioning_status TEXT,
             hourly_user_price REAL NOT NULL,
             hourly_power_cost REAL NOT NULL,
             FOREIGN KEY(rental_id) REFERENCES rentals(id) ON DELETE CASCADE,
             FOREIGN KEY(cabinet_id) REFERENCES cabinets(id) ON DELETE CASCADE
+        )
+        """,
+        f"""
+        CREATE TABLE IF NOT EXISTS node_heartbeats (
+            id {identity},
+            node_id TEXT NOT NULL UNIQUE,
+            host_ip TEXT NOT NULL,
+            accelerator_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'online',
+            reported_at TEXT,
+            last_seen_at TEXT NOT NULL,
+            raw TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        f"""
+        CREATE TABLE IF NOT EXISTS node_device_reports (
+            id {identity},
+            node_id TEXT NOT NULL,
+            device_index INTEGER NOT NULL,
+            name TEXT,
+            health TEXT,
+            usage_percent REAL,
+            memory_used_mb INTEGER,
+            memory_total_mb INTEGER,
+            hbm_used_mb INTEGER,
+            hbm_total_mb INTEGER,
+            process_count INTEGER NOT NULL DEFAULT 0,
+            observed_status TEXT NOT NULL DEFAULT 'unknown',
+            raw TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(node_id, device_index)
         )
         """,
     ]
@@ -269,6 +340,7 @@ def _schema_statements(backend: str) -> list[str]:
 def _migrate_schema(conn: ConnectionAdapter) -> None:
     _drop_column_if_exists(conn, "rentals", "timeslot")
     _ensure_column(conn, "rentals", "user_id", "INTEGER")
+    _ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
     _ensure_column(conn, "cabinets", "last_idle_at", "TEXT")
     _ensure_column(conn, "cabinets", "active_card_count", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "cabinets", "host_ip", "TEXT")
@@ -277,9 +349,25 @@ def _migrate_schema(conn: ConnectionAdapter) -> None:
     _ensure_column(conn, "rentals", "stop_reason", "TEXT")
     _ensure_column(conn, "rental_allocations", "allocated_cards", "INTEGER NOT NULL DEFAULT 1")
     _ensure_column(conn, "rental_allocations", "device_indices", "TEXT")
+    _ensure_column(conn, "rental_allocations", "instance_id", "TEXT")
+    _ensure_column(conn, "rental_allocations", "container_name", "TEXT")
+    _ensure_column(conn, "rental_allocations", "ssh_host", "TEXT")
+    _ensure_column(conn, "rental_allocations", "ssh_port", "INTEGER")
+    _ensure_column(conn, "rental_allocations", "ssh_username", "TEXT")
+    _ensure_column(conn, "rental_allocations", "ssh_password", "TEXT")
+    _ensure_column(conn, "rental_allocations", "ssh_command", "TEXT")
+    _ensure_column(conn, "rental_allocations", "provisioning_status", "TEXT")
+    _ensure_column(conn, "gpu_devices", "observed_status", "TEXT NOT NULL DEFAULT 'unknown'")
+    _ensure_column(conn, "gpu_devices", "health", "TEXT")
+    _ensure_column(conn, "gpu_devices", "usage_percent", "REAL")
+    _ensure_column(conn, "gpu_devices", "memory_used_mb", "INTEGER")
+    _ensure_column(conn, "gpu_devices", "memory_total_mb", "INTEGER")
+    _ensure_column(conn, "gpu_devices", "process_count", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "gpu_devices", "last_seen_at", "TEXT")
     _backfill_cabinet_load_state(conn)
     _backfill_rental_card_count(conn)
     _backfill_cabinet_connection_fields(conn)
+    _sync_gpu_devices_from_cabinets(conn)
     conn.execute(
         "UPDATE rental_allocations SET allocated_cards = 1 WHERE allocated_cards IS NULL OR allocated_cards < 1",
     )
@@ -351,6 +439,59 @@ def _backfill_cabinet_connection_fields(conn: ConnectionAdapter) -> None:
             "UPDATE cabinets SET host_ip = ?, ssh_port = ? WHERE id = ?",
             (next_host_ip, next_ssh_port, row["id"]),
         )
+
+
+def _sync_gpu_devices_from_cabinets(conn: ConnectionAdapter) -> None:
+    cabinets = conn.execute(
+        """
+        SELECT id, cabinet_code, card_type, capacity_cards, active_card_count
+        FROM cabinets
+        """
+    ).fetchall()
+    for cabinet in cabinets:
+        existing = conn.execute(
+            "SELECT gpu_index, status, rental_id FROM gpu_devices WHERE cabinet_id = ?",
+            (cabinet["id"],),
+        ).fetchall()
+        existing_by_index = {int(row["gpu_index"]): row for row in existing}
+        capacity_cards = int(cabinet["capacity_cards"])
+        active_card_count = int(cabinet["active_card_count"] or 0)
+        allowed_indices = get_allowed_device_indices(cabinet["cabinet_code"], capacity_cards)
+        for gpu_index in range(capacity_cards):
+            if gpu_index in existing_by_index:
+                row = existing_by_index[gpu_index]
+                next_status = row["status"]
+                if not row["rental_id"]:
+                    if gpu_index not in allowed_indices:
+                        next_status = "disabled"
+                    elif row["status"] == "disabled":
+                        next_status = "available"
+                if next_status != row["status"]:
+                    conn.execute(
+                        "UPDATE gpu_devices SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE cabinet_id = ? AND gpu_index = ?",
+                        (next_status, cabinet["id"], gpu_index),
+                    )
+                continue
+            if gpu_index not in allowed_indices:
+                status = "disabled"
+            else:
+                rented_allowed_before = sum(1 for idx in allowed_indices if idx < gpu_index)
+                status = "rented" if rented_allowed_before < active_card_count else "available"
+            conn.execute(
+                """
+                INSERT INTO gpu_devices (
+                    cabinet_id, gpu_index, gpu_name, status, rental_id
+                ) VALUES (?, ?, ?, ?, NULL)
+                """,
+                (cabinet["id"], gpu_index, cabinet["card_type"], status),
+            )
+        stale_indices = [idx for idx in existing_by_index if idx >= capacity_cards]
+        if stale_indices:
+            placeholders = ",".join("?" for _ in stale_indices)
+            conn.execute(
+                f"DELETE FROM gpu_devices WHERE cabinet_id = ? AND gpu_index IN ({placeholders}) AND rental_id IS NULL",
+                [cabinet["id"], *stale_indices],
+            )
 
 
 def _ensure_column(conn: ConnectionAdapter, table_name: str, column_name: str, column_sql: str) -> None:
@@ -531,19 +672,24 @@ def _sync_seed_reference_data(conn: ConnectionAdapter) -> None:
 
 
 def _seed_users(conn: ConnectionAdapter) -> None:
-    if _table_count(conn, "users"):
-        return
-
-    conn.executemany(
-        """
-        INSERT INTO users (
-            username, password_hash, phone, nickname, avatar_url, balance, status
-        ) VALUES (
-            :username, :password_hash, :phone, :nickname, :avatar_url, :balance, :status
+    seeded_initial_users = False
+    if not _table_count(conn, "users"):
+        conn.executemany(
+            """
+            INSERT INTO users (
+                username, password_hash, phone, nickname, avatar_url, balance, status, role
+            ) VALUES (
+                :username, :password_hash, :phone, :nickname, :avatar_url, :balance, :status, :role
+            )
+            """,
+            DEFAULT_USERS,
         )
-        """,
-        DEFAULT_USERS,
-    )
+        seeded_initial_users = True
+    else:
+        _ensure_default_admin(conn)
+
+    if not seeded_initial_users:
+        return
 
     default_user = conn.execute(
         "SELECT id, balance FROM users WHERE username = ?",
@@ -563,6 +709,36 @@ def _seed_users(conn: ConnectionAdapter) -> None:
             float(default_user["balance"]),
             float(default_user["balance"]),
             "初始化充值",
+        ),
+    )
+
+
+def _ensure_default_admin(conn: ConnectionAdapter) -> None:
+    admin_user = next((user for user in DEFAULT_USERS if user.get("role") == "admin"), None)
+    if not admin_user:
+        return
+    existing = conn.execute("SELECT id FROM users WHERE username = ?", (admin_user["username"],)).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE users SET role = 'admin', status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (existing["id"],),
+        )
+        return
+    conn.execute(
+        """
+        INSERT INTO users (
+            username, password_hash, phone, nickname, avatar_url, balance, status, role
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            admin_user["username"],
+            admin_user["password_hash"],
+            admin_user["phone"],
+            admin_user["nickname"],
+            admin_user["avatar_url"],
+            admin_user["balance"],
+            admin_user["status"],
+            admin_user["role"],
         ),
     )
 

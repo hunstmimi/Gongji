@@ -1,141 +1,138 @@
-import { useEffect, useMemo, useState } from "react";
+import { formatCurrency } from "../../utils/formatters";
 
-function clampCardCount(value, min, max) {
-  return Math.min(Math.max(value, min), Math.max(min, max));
+function formatGb(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "-";
+  }
+  const number = Number(value);
+  return `${Number.isInteger(number) ? number : number.toFixed(1)} GB`;
 }
 
-export default function CatalogCard({ card, onSubmit, submitting }) {
-  const pricingOptions = useMemo(() => card.pricing_options ?? [], [card.pricing_options]);
-  const firstOption = pricingOptions[0] ?? null;
-  const [cabinetType, setCabinetType] = useState(firstOption?.cabinet_type ?? card.cabinet_desc);
-  const [cardCount, setCardCount] = useState(firstOption?.min_card_count ?? 1);
-  const [pricingOpen, setPricingOpen] = useState(false);
+function selectedTier(option, selectedCardCount) {
+  return (option.pricing_preview ?? []).find((tier) => Number(tier.card_count) === selectedCardCount);
+}
 
-  const selectedOption =
-    pricingOptions.find((item) => item.cabinet_type === cabinetType) ??
-    firstOption;
-  const allSelectedPricing = selectedOption?.pricing_preview ?? [];
-  const minCardCount = selectedOption?.min_card_count ?? allSelectedPricing[0]?.card_count ?? 1;
-  const maxCardCount =
-    selectedOption?.max_card_count ??
-    allSelectedPricing[allSelectedPricing.length - 1]?.card_count ??
-    minCardCount;
-  const selectedPricing = allSelectedPricing.filter(
-    (tier) => tier.card_count >= minCardCount && tier.card_count <= maxCardCount
+function machineRows(card) {
+  return (card.pricing_options ?? []).flatMap((option) =>
+    option.allocation_policy === "spread"
+      ? [
+          {
+            option,
+            preferred: false,
+            machine: {
+              cabinet_code: `${card.card_type}-${option.cabinet_type}-pool`,
+              location: "资源池",
+              cabinet_type: option.cabinet_type,
+              available_cards: option.available_cards,
+              managed_cards: option.managed_cards,
+              total_cards: option.total_cards,
+              available_memory_gb: option.available_memory_gb,
+              total_memory_gb: option.total_memory_gb,
+              cpu: card.cpu,
+              memory: card.memory,
+              pool: true
+            }
+          }
+        ]
+      : (option.machines ?? []).map((machine) => ({
+          option,
+          machine,
+          preferred: true
+        }))
   );
-  const disabled = submitting || !selectedOption || selectedOption.disabled || maxCardCount < minCardCount;
+}
 
-  useEffect(() => {
-    const nextType = firstOption?.cabinet_type ?? card.cabinet_desc;
-    setCabinetType(nextType);
-    setCardCount(firstOption?.min_card_count ?? 1);
-    setPricingOpen(false);
-  }, [card.card_type, card.cabinet_desc, firstOption?.cabinet_type, firstOption?.min_card_count]);
-
-  useEffect(() => {
-    setCardCount((current) => clampCardCount(current, minCardCount, maxCardCount));
-  }, [minCardCount, maxCardCount]);
-
-  useEffect(() => {
-    setPricingOpen(false);
-    setCardCount(minCardCount);
-  }, [cabinetType, minCardCount]);
+export default function CatalogCard({ card, selectedCardCount, onSubmit, submitting }) {
+  const rows = machineRows(card);
+  const summary = card.summary ?? { available: 0, managed: 0, memory: 0 };
 
   return (
-    <article className="catalog-card">
-      <div className="catalog-card-head">
-        <div className="catalog-card-head-top">
-          <div>
-            <span className="eyebrow">{selectedOption?.capacity_cards > 1 ? "多卡机柜" : "按卡租用"}</span>
-            <h3>{card.title}</h3>
-          </div>
-          <button
-            className="primary-action catalog-card-submit"
-            disabled={disabled}
-            onClick={() =>
-              onSubmit(card.card_type, {
-                card_type: card.card_type,
-                cabinet_type: selectedOption?.cabinet_type ?? cabinetType,
-                card_count: cardCount
-              })
-            }
-          >
-            {submitting ? "提交中..." : "立即使用"}
-          </button>
-        </div>
-        <p>{card.cabinet_desc}</p>
-      </div>
-
-      <div className="spec-list">
-        <div><span>显存</span><strong>{card.vram}</strong></div>
-        <div><span>CPU</span><strong>{card.cpu}</strong></div>
-        <div><span>内存</span><strong>{card.memory}</strong></div>
-      </div>
-
-      <div className="card-form">
-        {pricingOptions.length > 1 ? (
-          <label className="field">
-            <span>机柜类型</span>
-            <select value={selectedOption?.cabinet_type ?? cabinetType} onChange={(event) => setCabinetType(event.target.value)}>
-              {pricingOptions.map((option) => (
-                <option key={option.cabinet_type} value={option.cabinet_type} disabled={option.disabled}>
-                  {option.cabinet_type}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        <label className="field">
-          <span>租几张卡</span>
-          <input
-            type="number"
-            min={minCardCount}
-            max={maxCardCount}
-            value={cardCount}
-            disabled={disabled}
-            onChange={(event) => {
-              const nextValue = Number(event.target.value) || minCardCount;
-              setCardCount(clampCardCount(nextValue, minCardCount, maxCardCount));
-            }}
-          />
-        </label>
-
-        {selectedOption ? (
-          <div className="readonly-value">
-            可租 {selectedOption.available_cards} 卡，本次最多 {maxCardCount} 卡，{selectedOption.capacity_cards} 卡/机柜
-            {selectedOption.min_card_count > 1 ? `，${selectedOption.min_card_count} 卡起租` : ""}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="pricing-dropdown">
-        <button
-          type="button"
-          className="pricing-dropdown-trigger"
-          onClick={() => setPricingOpen((current) => !current)}
-        >
-          <span>查看每张卡价位</span>
-          <strong>{pricingOpen ? "收起" : `${selectedPricing.length}档价格`}</strong>
-        </button>
-        {pricingOpen ? (
-          <div className="pricing-preview">
-            {selectedPricing.map((tier) => (
-              <div key={`${selectedOption?.cabinet_type ?? cabinetType}-${tier.card_count}`} className="pricing-preview-row">
-                <span>{tier.card_count}卡</span>
-                <strong>{tier.hourly_user_price_total.toFixed(1)}元/小时</strong>
-                <em>均价 {tier.avg_per_card.toFixed(2)}/卡</em>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="catalog-card-foot">
+    <article className="resource-group">
+      <div className="resource-group-head">
         <div>
-          <span className="price-label">展示价格</span>
-          <strong>{selectedPricing[0] ? `${selectedPricing[0].card_count}卡 ${selectedPricing[0].hourly_user_price_total.toFixed(1)}元/小时起` : card.display_price}</strong>
+          <span className="resource-group-kicker">{card.cabinet_desc}</span>
+          <h2>{card.title}</h2>
         </div>
+        <div className="resource-group-stats">
+          <span>空闲/总量 <strong>{summary.available}/{summary.managed}</strong></span>
+          <span>可用显存 <strong>{formatGb(summary.memory)}</strong></span>
+        </div>
+      </div>
+
+      <div className="machine-list">
+        {rows.length === 0 ? (
+          <div className="machine-empty">当前没有可展示的机器资源。</div>
+        ) : null}
+
+        {rows.map(({ option, machine, preferred }) => {
+          const tier = selectedTier(option, selectedCardCount);
+          const canRent =
+            !submitting &&
+            !option.disabled &&
+            Boolean(tier) &&
+            Number(machine.available_cards ?? 0) >= selectedCardCount;
+          const actionKey = `${card.card_type}-${machine.cabinet_code}`;
+
+          return (
+            <div key={machine.cabinet_code} className={`machine-row ${canRent ? "" : "machine-row-muted"}`}>
+              <div className="machine-row-top">
+                <div>
+                  <div className="machine-meta">
+                    <span>{machine.location}</span>
+                    <span>{machine.pool ? `${card.card_type} 可用资源池` : machine.cabinet_code}</span>
+                    <span>{option.cabinet_type}</span>
+                  </div>
+                  <h3>{card.title} / {card.vram}</h3>
+                </div>
+                <div className="machine-free-count">
+                  空闲/总量 <strong>{machine.available_cards}/{machine.managed_cards || machine.total_cards}</strong>
+                </div>
+              </div>
+
+              <div className="machine-row-body">
+                <div className="machine-spec-column">
+                  <span>每GPU分配</span>
+                  <p>CPU: <strong>{machine.cpu ?? card.cpu}</strong></p>
+                  <p>内存: <strong>{machine.memory ?? card.memory}</strong></p>
+                </div>
+
+                <div className="machine-spec-column">
+                  <span>显存状态</span>
+                  <p>可用显存: <strong>{formatGb(machine.available_memory_gb)}</strong></p>
+                  <p>平台可租: <strong>{machine.managed_cards}</strong> 卡，总卡 {machine.total_cards}</p>
+                </div>
+
+                <div className="machine-spec-column">
+                  <span>隔离方式</span>
+                  <p>容器: <strong>独立 SSH</strong></p>
+                  <p>设备: 只挂载分配到的卡</p>
+                </div>
+
+                <div className="machine-rent-column">
+                  <strong className="machine-price">
+                    {tier ? `${formatCurrency(tier.hourly_user_price_total)}/时` : "不可租"}
+                  </strong>
+                  <span>{tier ? `平均 ${formatCurrency(tier.avg_per_card)}/卡·时` : "该数量当前不可用"}</span>
+                  <button
+                    className="primary-action machine-rent-button"
+                    disabled={!canRent}
+                    onClick={() =>
+                      onSubmit(actionKey, {
+                        card_type: card.card_type,
+                        cabinet_type: option.cabinet_type,
+                        card_count: selectedCardCount,
+                        ...(preferred ? { preferred_cabinet_code: machine.cabinet_code } : {})
+                      })
+                    }
+                    type="button"
+                  >
+                    {submitting ? "提交中..." : canRent ? `${selectedCardCount}卡可租` : "库存不足"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </article>
   );

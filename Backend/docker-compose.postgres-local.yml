@@ -1,0 +1,25 @@
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: docker/postgres-alpine/Dockerfile
+    image: gongji/postgres:16-alpine-local
+    container_name: gongji-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gongji
+      POSTGRES_USER: gongji
+      POSTGRES_PASSWORD: gongji-password
+      PGDATA: /var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    volumes:
+      - gongji-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gongji -d gongji"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  gongji-postgres-data:

@@ -51,7 +51,9 @@ def test_locations_summary_breakdown_contains_expected_machine_types(client):
     ]
 
     location_four_breakdown = items["位置4"]["cabinet_breakdown"]
-    assert ("V100X2", "单卡机柜") in [
+    assert ("910B3", "8卡机柜") in [
         (entry["card_type"], entry["cabinet_type"]) for entry in location_four_breakdown
     ]
-    assert sum(entry["available_cards"] for entry in location_four_breakdown) >= 1
+    assert sum(entry["available_cards"] for entry in location_four_breakdown) == 4
+    assert sum(entry["managed_cards"] for entry in location_four_breakdown) == 4
+    assert sum(entry["total_cards"] for entry in location_four_breakdown) == 8

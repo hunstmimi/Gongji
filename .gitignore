@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tmp_pytest/
+
+node_modules/
+dist/
+
+*.log
+compute_rental.db
+.env

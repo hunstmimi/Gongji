@@ -111,6 +111,10 @@ export function getDashboard() {
   return request("/api/me/dashboard");
 }
 
+export function getAdminUsage() {
+  return request("/api/admin/usage");
+}
+
 export function rechargeBalance(amount) {
   return request("/api/me/balance/recharge", {
     method: "POST",

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: gongji-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gongji
+      POSTGRES_USER: gongji
+      POSTGRES_PASSWORD: gongji-password
+    ports:
+      - "5432:5432"
+    volumes:
+      - gongji-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gongji -d gongji"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  gongji-postgres-data:

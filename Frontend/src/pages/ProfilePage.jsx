@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import HeaderUserSection from "../components/layout/HeaderUserSection";
 import PageShell from "../components/layout/PageShell";
 import { useAuth } from "../context/AuthContext";
-import { getDashboard, rechargeBalance } from "../services/api";
+import { cancelRental, getDashboard, rechargeBalance } from "../services/api";
 import { formatCurrency } from "../utils/formatters";
 
 export default function ProfilePage() {
@@ -17,6 +17,16 @@ export default function ProfilePage() {
   const [rechargeAmount, setRechargeAmount] = useState("");
   const [showRechargeForm, setShowRechargeForm] = useState(false);
   const [success, setSuccess] = useState("");
+  const [cancellingRentalId, setCancellingRentalId] = useState(null);
+
+  async function loadDashboard() {
+    const data = await getDashboard();
+    setDashboard(data);
+    if (data.user) {
+      setUser(data.user);
+    }
+    return data;
+  }
 
   useEffect(() => {
     if (!ready) {
@@ -32,12 +42,7 @@ export default function ProfilePage() {
     let active = true;
     setLoading(true);
     setError("");
-    getDashboard()
-      .then((data) => {
-        if (active) {
-          setDashboard(data);
-        }
-      })
+    loadDashboard()
       .catch((err) => {
         if (active) {
           setError(err.message);
@@ -85,6 +90,26 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleCancelRental(rentalId) {
+    const confirmed = window.confirm("确定要结束这个租单并释放对应容器和卡吗？");
+    if (!confirmed) {
+      return;
+    }
+    setCancellingRentalId(rentalId);
+    setError("");
+    setSuccess("");
+    try {
+      await cancelRental(rentalId);
+      await loadDashboard();
+      setTab("history");
+      setSuccess("租单已结束，容器和卡已释放。");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCancellingRentalId(null);
+    }
+  }
+
   async function handleLogout() {
     await logout();
     navigate("/");
@@ -100,7 +125,7 @@ export default function ProfilePage() {
         <div>
           <span className="eyebrow">Profile Center</span>
           <h1>我的租赁</h1>
-          <p>进行中和历史记录分开展示。进行中的卡片支持直接跳到连接信息与分配结果页面。</p>
+          <p>查看当前租单、连接信息和历史记录。进行中的租单可以在这里直接结束并释放卡。</p>
         </div>
         <div className="header-action-group">
           <Link className="secondary-link" to="/">
@@ -120,18 +145,20 @@ export default function ProfilePage() {
             <div className="profile-main-head">
               <div>
                 <h2>我的租赁</h2>
-                <p>点进行中查看当前租赁实例，点历史查看过往租单。</p>
+                <p>进行中租单支持查看 SSH 信息，也可以直接结束租单释放资源。</p>
               </div>
               <div className="profile-tab-group">
                 <button
                   className={`profile-tab-chip ${tab === "active" ? "profile-tab-chip-active" : ""}`}
                   onClick={() => setTab("active")}
+                  type="button"
                 >
                   进行中
                 </button>
                 <button
                   className={`profile-tab-chip ${tab === "history" ? "profile-tab-chip-active" : ""}`}
                   onClick={() => setTab("history")}
+                  type="button"
                 >
                   历史
                 </button>
@@ -144,18 +171,14 @@ export default function ProfilePage() {
               {showingItems.length === 0 ? (
                 <div className="profile-empty-card">
                   {tab === "active"
-                    ? "当前没有进行中的租赁。等你真正创建租单后，这里会自动出现。"
+                    ? "当前没有进行中的租赁。创建租单后，这里会显示可操作的租单。"
                     : "当前没有历史租赁记录。"}
                 </div>
               ) : null}
 
               {tab === "active"
                 ? showingItems.map((item) => (
-                    <button
-                      key={item.rental_id}
-                      className="profile-rental-card profile-rental-card-button"
-                      onClick={() => navigate(`/result?rentalId=${item.rental_id}`)}
-                    >
+                    <article key={item.rental_id} className="profile-rental-card">
                       <div>
                         <h3>{item.card_label}</h3>
                         <p>
@@ -166,8 +189,24 @@ export default function ProfilePage() {
                           当前花销 {formatCurrency(item.current_amount)}
                         </p>
                       </div>
-                      <span className="profile-card-cta">查看连接信息</span>
-                    </button>
+                      <div className="profile-rental-actions">
+                        <button
+                          className="profile-card-cta"
+                          onClick={() => navigate(`/result?rentalId=${item.rental_id}`)}
+                          type="button"
+                        >
+                          查看连接信息
+                        </button>
+                        <button
+                          className="profile-card-stop"
+                          disabled={cancellingRentalId === item.rental_id}
+                          onClick={() => handleCancelRental(item.rental_id)}
+                          type="button"
+                        >
+                          {cancellingRentalId === item.rental_id ? "结束中..." : "结束租单"}
+                        </button>
+                      </div>
+                    </article>
                   ))
                 : showingItems.map((item) => (
                     <article key={item.rental_id} className="profile-rental-card">
@@ -209,6 +248,7 @@ export default function ProfilePage() {
                     setError("");
                     setSuccess("");
                   }}
+                  type="button"
                 >
                   充值
                 </button>
@@ -227,7 +267,7 @@ export default function ProfilePage() {
                     />
                   </label>
                   <div className="recharge-actions">
-                    <button className="primary-action profile-recharge" disabled={recharging} onClick={handleRecharge}>
+                    <button className="primary-action profile-recharge" disabled={recharging} onClick={handleRecharge} type="button">
                       {recharging ? "充值中..." : "确认充值"}
                     </button>
                     <button
@@ -237,6 +277,7 @@ export default function ProfilePage() {
                         setShowRechargeForm(false);
                         setRechargeAmount("");
                       }}
+                      type="button"
                     >
                       取消
                     </button>
@@ -247,7 +288,7 @@ export default function ProfilePage() {
 
             <div className="profile-side-card profile-side-card-compact">
               <h2>账户操作</h2>
-              <button className="danger-action secondary-link-block" onClick={handleLogout}>
+              <button className="danger-action secondary-link-block" onClick={handleLogout} type="button">
                 退出登录
               </button>
             </div>

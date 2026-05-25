@@ -1,10 +1,10 @@
 export function getNodeRadius(totalCabinets, minCabinets, maxCabinets) {
-  const minRadius = 16;
-  const maxRadius = 30;
+  const minRadius = 24;
+  const maxRadius = 48;
   const total = Number(totalCabinets) || 0;
 
   if (maxCabinets <= minCabinets) {
-    return 22;
+    return Math.max(minRadius, Math.min(maxRadius, 28 + Math.min(total, 12)));
   }
 
   const ratio = (total - minCabinets) / (maxCabinets - minCabinets);

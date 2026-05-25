@@ -5,6 +5,33 @@ import { useAuth } from "../context/AuthContext";
 
 const TABS = ["login", "register"];
 
+function validateAuthForm(form) {
+  const username = form.username.trim();
+  const password = form.password;
+  const phone = form.phone.trim();
+  const nickname = form.nickname.trim();
+
+  if (username.length < 3) {
+    return "用户名至少需要 3 个字符";
+  }
+  if (username.length > 64) {
+    return "用户名不能超过 64 个字符";
+  }
+  if (password.length < 6) {
+    return "密码至少需要 6 个字符";
+  }
+  if (password.length > 128) {
+    return "密码不能超过 128 个字符";
+  }
+  if (nickname.length > 64) {
+    return "昵称不能超过 64 个字符";
+  }
+  if (phone.length > 32) {
+    return "手机号不能超过 32 个字符";
+  }
+  return "";
+}
+
 export default function AuthPage() {
   const navigate = useNavigate();
   const { isAuthenticated, login, register } = useAuth();
@@ -28,20 +55,25 @@ export default function AuthPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setSubmitting(true);
     setError("");
+    const validationError = validateAuthForm(form);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setSubmitting(true);
     try {
       if (mode === "login") {
         await login({
-          username: form.username,
+          username: form.username.trim(),
           password: form.password
         });
       } else {
         await register({
-          username: form.username,
+          username: form.username.trim(),
           password: form.password,
-          nickname: form.nickname,
-          phone: form.phone
+          nickname: form.nickname.trim() || null,
+          phone: form.phone.trim() || null
         });
       }
       navigate("/");

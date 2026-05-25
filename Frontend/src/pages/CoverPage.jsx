@@ -43,12 +43,12 @@ export default function CoverPage() {
           <span className="eyebrow">Compute Rental Network</span>
           <h1>整机柜算力网络</h1>
           <p className="hero-copy">
-            实时展示四个位置的机柜分布与可用状态。绿色表示当前仍有可租机柜，红色表示已占满，灰色表示离线省电中。
+            实时展示各位置的机柜分布、可租卡数、显存余量和设备健康状态。绿色表示仍有可租卡，红色表示已占满，灰色表示离线或不可调度。
           </p>
         </div>
         <div className="header-action-group">
-          <button className="primary-action" onClick={() => navigate(isAuthenticated ? "/catalog" : "/auth")}>
-            立即租赁
+          <button className="primary-action" onClick={() => navigate(isAuthenticated ? "/catalog" : "/auth")} type="button">
+            {isAuthenticated ? "进入租赁" : "登录后租赁"}
           </button>
           <HeaderUserSection />
         </div>
@@ -59,7 +59,7 @@ export default function CoverPage() {
           <div className="panel-head">
             <div>
               <h2>可用机柜</h2>
-              <p>移动到任意位置节点上，查看该位置内部不同机柜类型的剩余台数。</p>
+              <p>点击任意位置节点，查看该位置的卡型分布、空闲卡数、可用显存和基础占用情况。</p>
             </div>
             <div className="legend">
               <span className="legend-chip legend-available">有卡</span>
