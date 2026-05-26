@@ -68,3 +68,9 @@ class AdminCreateMachineRequest(BaseModel):
     capacity_cards: int = Field(ge=1, le=16)
     day_hourly_power_cost: float = Field(default=0, ge=0)
     night_hourly_power_cost: float = Field(default=0, ge=0)
+
+
+class AdminMachineAccessRequest(AdminCreateMachineRequest):
+    ssh_username: str = Field(min_length=1, max_length=128)
+    ssh_password: str = Field(min_length=1, max_length=256)
+    sudo_password: str | None = Field(default=None, max_length=256)

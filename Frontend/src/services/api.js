@@ -126,6 +126,20 @@ export function createAdminMachine(body) {
   });
 }
 
+export function probeAdminMachine(body) {
+  return request("/api/admin/machines/probe", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export function deployAdminMachineAgent(body) {
+  return request("/api/admin/machines/deploy-agent", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
 export function rechargeBalance(amount) {
   return request("/api/me/balance/recharge", {
     method: "POST",

@@ -1609,6 +1609,10 @@ button {
   font-size: 13px;
 }
 
+.admin-machine-wide {
+  grid-column: 1 / -1;
+}
+
 .admin-machine-form input,
 .admin-machine-form select {
   width: 100%;
@@ -1627,19 +1631,130 @@ button {
   box-shadow: 0 0 0 4px rgba(49, 92, 242, 0.1);
 }
 
-.admin-machine-submit {
+.admin-machine-actions {
   grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-machine-submit,
+.admin-machine-secondary,
+.admin-machine-ghost {
   min-height: 50px;
-  border: 0;
   border-radius: 15px;
-  background: #315cf2;
-  color: #fff;
   font-weight: 900;
 }
 
-.admin-machine-submit:disabled {
+.admin-machine-submit {
+  border: 0;
+  background: #315cf2;
+  color: #fff;
+}
+
+.admin-machine-secondary {
+  border: 1px solid rgba(49, 92, 242, 0.34);
+  background: rgba(49, 92, 242, 0.1);
+  color: #315cf2;
+}
+
+.admin-machine-ghost {
+  border: 1px solid rgba(171, 187, 205, 0.52);
+  background: #fff;
+  color: #60758f;
+}
+
+.admin-machine-submit:disabled,
+.admin-machine-secondary:disabled,
+.admin-machine-ghost:disabled {
   cursor: not-allowed;
   opacity: 0.64;
+}
+
+.probe-result-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  border-radius: 18px;
+  background: #f3f6f9;
+  padding: 16px;
+}
+
+.probe-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.probe-result-head strong {
+  color: #10213d;
+  font-size: 18px;
+}
+
+.probe-result-head span {
+  color: #6c7f96;
+  font-weight: 800;
+}
+
+.probe-check-list {
+  display: grid;
+  gap: 8px;
+}
+
+.probe-check-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 12px;
+}
+
+.probe-check-row strong,
+.probe-check-row span,
+.probe-check-row em {
+  display: block;
+}
+
+.probe-check-row strong {
+  margin-bottom: 3px;
+}
+
+.probe-check-row span,
+.probe-check-row em {
+  color: #6c7f96;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.probe-check-row em {
+  margin-top: 5px;
+  color: #be4453;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.probe-check-row b {
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.probe-check-pass b {
+  background: rgba(36, 194, 126, 0.16);
+  color: #18895a;
+}
+
+.probe-check-fail b {
+  background: rgba(243, 91, 107, 0.14);
+  color: #be4453;
+}
+
+.probe-check-warn b {
+  background: rgba(244, 181, 73, 0.18);
+  color: #9b6412;
 }
 
 .admin-machine-list {
@@ -1909,7 +2024,9 @@ button {
   .filter-row,
   .machine-row-top,
   .machine-row-body,
-  .admin-machine-form {
+  .admin-machine-form,
+  .admin-machine-actions,
+  .probe-check-row {
     grid-template-columns: 1fr;
   }
 

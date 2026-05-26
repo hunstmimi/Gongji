@@ -105,6 +105,11 @@ def resolve_agent_token() -> str:
     return os.getenv("COMPUTE_RENTAL_AGENT_TOKEN") or "local-agent-token"
 
 
+def resolve_backend_public_base_url() -> str:
+    value = (os.getenv("COMPUTE_RENTAL_BACKEND_PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    return value or "http://10.26.6.117:8000"
+
+
 def resolve_agent_dry_run() -> bool:
     value = (os.getenv("COMPUTE_RENTAL_AGENT_DRY_RUN") or "true").strip().lower()
     return value not in {"0", "false", "no", "off"}

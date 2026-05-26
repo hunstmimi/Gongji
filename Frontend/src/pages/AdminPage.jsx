@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import HeaderUserSection from "../components/layout/HeaderUserSection";
 import PageShell from "../components/layout/PageShell";
-import { createAdminMachine, getAdminMachines, getAdminUsage } from "../services/api";
+import {
+  createAdminMachine,
+  deployAdminMachineAgent,
+  getAdminMachines,
+  getAdminUsage,
+  probeAdminMachine
+} from "../services/api";
 
 const DEFAULT_FORM = {
   cabinet_code: "",
@@ -13,7 +19,10 @@ const DEFAULT_FORM = {
   cabinet_type: "单卡机柜",
   capacity_cards: 1,
   day_hourly_power_cost: 1.8,
-  night_hourly_power_cost: 1.6
+  night_hourly_power_cost: 1.6,
+  ssh_username: "",
+  ssh_password: "",
+  sudo_password: ""
 };
 
 const POWER_DEFAULTS = {
@@ -63,6 +72,10 @@ export default function AdminPage() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [probing, setProbing] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [probeResult, setProbeResult] = useState(null);
+  const [deployResult, setDeployResult] = useState(null);
   const [error, setError] = useState("");
   const [machineMessage, setMachineMessage] = useState("");
 
@@ -103,6 +116,8 @@ export default function AdminPage() {
 
   const updateField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
+    setProbeResult(null);
+    setDeployResult(null);
   };
 
   const selectMachineType = (value) => {
@@ -126,8 +141,12 @@ export default function AdminPage() {
     setError("");
     setMachineMessage("");
     createAdminMachine({
-      ...form,
+      cabinet_code: form.cabinet_code,
+      location: form.location,
+      host_ip: form.host_ip,
       ssh_port: Number(form.ssh_port),
+      card_type: form.card_type,
+      cabinet_type: form.cabinet_type,
       capacity_cards: Number(form.capacity_cards),
       day_hourly_power_cost: Number(form.day_hourly_power_cost),
       night_hourly_power_cost: Number(form.night_hourly_power_cost)
@@ -135,6 +154,8 @@ export default function AdminPage() {
       .then((data) => {
         setMachineMessage(data.message ?? "机器已添加");
         setForm(DEFAULT_FORM);
+        setProbeResult(null);
+        setDeployResult(null);
         return getAdminMachines();
       })
       .then((data) => {
@@ -147,6 +168,56 @@ export default function AdminPage() {
         setCreating(false);
       });
   };
+
+  const accessPayload = () => ({
+    ...form,
+    ssh_port: Number(form.ssh_port),
+    capacity_cards: Number(form.capacity_cards),
+    day_hourly_power_cost: Number(form.day_hourly_power_cost),
+    night_hourly_power_cost: Number(form.night_hourly_power_cost)
+  });
+
+  const probeMachine = () => {
+    setProbing(true);
+    setError("");
+    setMachineMessage("");
+    setDeployResult(null);
+    probeAdminMachine(accessPayload())
+      .then((data) => {
+        setProbeResult(data);
+        setMachineMessage(data.can_deploy ? "检测通过，可以部署 Agent" : "检测未通过，请按提示处理后重试");
+      })
+      .catch((err) => {
+        setError(err.message);
+      })
+      .finally(() => {
+        setProbing(false);
+      });
+  };
+
+  const deployAgent = () => {
+    setDeploying(true);
+    setError("");
+    setMachineMessage("");
+    deployAdminMachineAgent(accessPayload())
+      .then((data) => {
+        setDeployResult(data);
+        setProbeResult({ can_deploy: data.can_deploy, checks: data.checks ?? [] });
+        setMachineMessage(data.message ?? "部署流程已结束");
+        return getAdminMachines();
+      })
+      .then((data) => {
+        setMachineData(data);
+      })
+      .catch((err) => {
+        setError(err.message);
+      })
+      .finally(() => {
+        setDeploying(false);
+      });
+  };
+
+  const canDeploy = Boolean(probeResult?.can_deploy) && !deploying;
 
   return (
     <PageShell compact>
@@ -289,10 +360,89 @@ export default function AdminPage() {
                     required
                   />
                 </label>
-                <button className="primary-button admin-machine-submit" type="submit" disabled={creating}>
-                  {creating ? "正在添加..." : "添加机器"}
-                </button>
+                <label>
+                  <span>SSH 用户名</span>
+                  <input
+                    value={form.ssh_username}
+                    onChange={(event) => updateField("ssh_username", event.target.value)}
+                    placeholder="testsv"
+                    autoComplete="username"
+                  />
+                </label>
+                <label>
+                  <span>SSH 密码</span>
+                  <input
+                    type="password"
+                    value={form.ssh_password}
+                    onChange={(event) => updateField("ssh_password", event.target.value)}
+                    placeholder="仅本次检测/部署使用"
+                    autoComplete="current-password"
+                  />
+                </label>
+                <label className="admin-machine-wide">
+                  <span>sudo 密码</span>
+                  <input
+                    type="password"
+                    value={form.sudo_password}
+                    onChange={(event) => updateField("sudo_password", event.target.value)}
+                    placeholder="不填则默认同 SSH 密码"
+                    autoComplete="current-password"
+                  />
+                </label>
+
+                <div className="admin-machine-actions">
+                  <button className="secondary-button admin-machine-secondary" type="button" onClick={probeMachine} disabled={probing || !form.ssh_username || !form.ssh_password}>
+                    {probing ? "正在检测..." : "检测环境"}
+                  </button>
+                  <button className="primary-button admin-machine-submit" type="button" onClick={deployAgent} disabled={!canDeploy}>
+                    {deploying ? "正在部署..." : "一键部署并添加"}
+                  </button>
+                  <button className="ghost-button admin-machine-ghost" type="submit" disabled={creating}>
+                    {creating ? "正在录入..." : "只录入机器"}
+                  </button>
+                </div>
               </form>
+
+              {probeResult?.checks?.length ? (
+                <div className="probe-result-panel">
+                  <div className="probe-result-head">
+                    <strong>{probeResult.can_deploy ? "检测通过" : "检测未通过"}</strong>
+                    <span>{probeResult.can_deploy ? "可以执行 Agent 部署" : "按失败项处理后重试"}</span>
+                  </div>
+                  <div className="probe-check-list">
+                    {probeResult.checks.map((item) => (
+                      <div key={item.key} className={`probe-check-row probe-check-${item.status}`}>
+                        <div>
+                          <strong>{item.label}</strong>
+                          <span>{item.details || "-"}</span>
+                          {item.remediation ? <em>{item.remediation}</em> : null}
+                        </div>
+                        <b>{item.status === "pass" ? "通过" : item.status === "warn" ? "提醒" : "失败"}</b>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {deployResult?.steps?.length ? (
+                <div className="probe-result-panel">
+                  <div className="probe-result-head">
+                    <strong>{deployResult.deployed ? "部署完成" : "部署中断"}</strong>
+                    <span>{deployResult.message}</span>
+                  </div>
+                  <div className="probe-check-list">
+                    {deployResult.steps.map((item) => (
+                      <div key={item.key} className={`probe-check-row probe-check-${item.status}`}>
+                        <div>
+                          <strong>{item.label}</strong>
+                          <span>{item.details || "-"}</span>
+                        </div>
+                        <b>{item.status === "pass" ? "通过" : "失败"}</b>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <section className="admin-panel">
