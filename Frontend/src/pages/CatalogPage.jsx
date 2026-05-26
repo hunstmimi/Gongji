@@ -11,10 +11,9 @@ function summarizeCard(card) {
     (summary, option) => ({
       available: summary.available + Number(option.available_cards ?? 0),
       managed: summary.managed + Number(option.managed_cards ?? option.total_cards ?? 0),
-      memory: summary.memory + Number(option.available_memory_gb ?? 0),
-      max: Math.max(summary.max, Number(option.max_card_count ?? 1))
+      memory: summary.memory + Number(option.available_memory_gb ?? 0)
     }),
-    { available: 0, managed: 0, memory: 0, max: 1 }
+    { available: 0, managed: 0, memory: 0 }
   );
 }
 
@@ -23,7 +22,9 @@ function getCountOptions(cards, selectedType) {
   const maxCount = Math.max(
     1,
     ...relevantCards.flatMap((card) =>
-      (card.pricing_options ?? []).map((option) => Number(option.max_card_count ?? 1))
+      (card.pricing_options ?? []).flatMap((option) =>
+        (option.machines ?? []).map((machine) => Number(machine.available_cards ?? 0))
+      )
     )
   );
   return Array.from({ length: Math.min(maxCount, 12) }, (_, index) => index + 1);
@@ -101,8 +102,10 @@ export default function CatalogPage() {
       <header className="standard-header catalog-standard-header">
         <div>
           <span className="eyebrow">Compute Market</span>
-          <h1>选择可用算力</h1>
-          <p>按卡型和卡数筛选当前可租资源。点击某台机器或资源池的租赁按钮后，后端会锁定对应卡并创建独立 SSH 容器。</p>
+          <h1>选择物理机租赁</h1>
+          <p>
+            每一行都是一台真实物理机。点击某台机器的租赁按钮后，后端只会在这台机器内锁定对应卡并创建一个独立 SSH 容器。
+          </p>
         </div>
         <div className="header-action-group">
           <Link className="secondary-link" to="/">
@@ -115,7 +118,7 @@ export default function CatalogPage() {
       {error ? <div className="error-banner">{error}</div> : null}
 
       {loading ? (
-        <div className="empty-state">正在加载卡型与机器资源...</div>
+        <div className="empty-state">正在加载物理机资源...</div>
       ) : (
         <>
           <section className="rental-filter-panel">
@@ -125,7 +128,7 @@ export default function CatalogPage() {
                 <strong>{totalSummary.available}</strong>
                 <em>/ {totalSummary.managed}</em>
               </div>
-              <p>空闲统计会排除已禁用、未知占用和健康异常的设备。</p>
+              <p>列表按物理机出售，同一租单只会落到一台机器上；单卡机器一次只能租 1 卡。</p>
             </div>
 
             <div className="filter-row">
@@ -177,7 +180,7 @@ export default function CatalogPage() {
                 card={card}
                 selectedCardCount={selectedCardCount}
                 onSubmit={handleCreateRental}
-                submitting={submittingCardKey === card.card_type}
+                submittingKey={submittingCardKey}
               />
             ))}
           </section>
