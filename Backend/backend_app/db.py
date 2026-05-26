@@ -613,15 +613,6 @@ def _sync_seed_reference_data(conn: ConnectionAdapter) -> None:
     seeded_by_code = {item["cabinet_code"]: item for item in build_cabinets()}
     existing_rows = conn.execute("SELECT id, cabinet_code FROM cabinets").fetchall()
     existing_codes = {row["cabinet_code"] for row in existing_rows}
-    stale_codes = [row["cabinet_code"] for row in existing_rows if row["cabinet_code"] not in seeded_by_code]
-
-    if stale_codes:
-        placeholders = ",".join("?" for _ in stale_codes)
-        conn.execute(
-            f"DELETE FROM cabinets WHERE cabinet_code IN ({placeholders})",
-            stale_codes,
-        )
-
     for row in existing_rows:
         cabinet = seeded_by_code.get(row["cabinet_code"])
         if not cabinet:

@@ -22,9 +22,9 @@ def test_locations_summary_counts_and_status(client):
     assert items["位置1"]["available_cards"] > 0
     assert items["位置1"]["node_status"] == "available"
 
-    assert items["位置2"]["total_cabinets"] == 0
-    assert items["位置2"]["available_cards"] == 0
-    assert items["位置2"]["node_status"] == "offline"
+    assert items["位置2"]["total_cabinets"] == 2
+    assert items["位置2"]["available_cards"] == 2
+    assert items["位置2"]["node_status"] == "available"
 
     assert items["位置3"]["node_status"] == "available"
     assert items["位置4"]["available_cards"] >= 1
@@ -50,6 +50,12 @@ def test_locations_summary_breakdown_contains_expected_machine_types(client):
 
     pairs = [(entry["card_type"], entry["cabinet_type"]) for entry in location_one_breakdown]
     assert pairs == [("3090", "单卡机柜")]
+
+    location_two_breakdown = items["位置2"]["cabinet_breakdown"]
+    assert [
+        (entry["card_type"], entry["cabinet_type"], entry["total_cabinets"])
+        for entry in location_two_breakdown
+    ] == [("3090", "单卡机柜", 1), ("4090", "单卡机柜", 1)]
 
     location_four_breakdown = items["位置4"]["cabinet_breakdown"]
     assert ("910B3", "8卡机柜") in [

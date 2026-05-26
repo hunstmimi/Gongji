@@ -115,6 +115,17 @@ export function getAdminUsage() {
   return request("/api/admin/usage");
 }
 
+export function getAdminMachines() {
+  return request("/api/admin/machines");
+}
+
+export function createAdminMachine(body) {
+  return request("/api/admin/machines", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
 export function rechargeBalance(amount) {
   return request("/api/me/balance/recharge", {
     method: "POST",

@@ -56,3 +56,15 @@ class NodeHeartbeatRequest(BaseModel):
     devices: list[NodeDeviceReport] = Field(default_factory=list)
     containers: list[NodeContainerReport] = Field(default_factory=list)
     raw: str | None = None
+
+
+class AdminCreateMachineRequest(BaseModel):
+    cabinet_code: str = Field(min_length=3, max_length=128)
+    location: str = Field(min_length=1, max_length=128)
+    host_ip: str = Field(min_length=1, max_length=128)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
+    card_type: str = Field(min_length=1, max_length=64)
+    cabinet_type: str = Field(min_length=1, max_length=64)
+    capacity_cards: int = Field(ge=1, le=16)
+    day_hourly_power_cost: float = Field(default=0, ge=0)
+    night_hourly_power_cost: float = Field(default=0, ge=0)

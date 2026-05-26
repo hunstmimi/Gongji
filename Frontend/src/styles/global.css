@@ -1557,6 +1557,10 @@ button {
   gap: 18px;
 }
 
+.admin-machine-grid {
+  grid-template-columns: minmax(420px, 0.82fr) minmax(0, 1.18fr);
+}
+
 .admin-panel {
   border-radius: 24px;
   padding: 24px;
@@ -1585,6 +1589,137 @@ button {
 .admin-panel-head > strong {
   color: #315cf2;
   font-size: 28px;
+}
+
+.admin-machine-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-machine-form label {
+  display: grid;
+  gap: 8px;
+  color: #10213d;
+  font-weight: 800;
+}
+
+.admin-machine-form label span {
+  color: #6c7f96;
+  font-size: 13px;
+}
+
+.admin-machine-form input,
+.admin-machine-form select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid rgba(171, 187, 205, 0.52);
+  border-radius: 14px;
+  background: #f9fbfd;
+  color: #10213d;
+  padding: 0 13px;
+  outline: none;
+}
+
+.admin-machine-form input:focus,
+.admin-machine-form select:focus {
+  border-color: rgba(49, 92, 242, 0.72);
+  box-shadow: 0 0 0 4px rgba(49, 92, 242, 0.1);
+}
+
+.admin-machine-submit {
+  grid-column: 1 / -1;
+  min-height: 50px;
+  border: 0;
+  border-radius: 15px;
+  background: #315cf2;
+  color: #fff;
+  font-weight: 900;
+}
+
+.admin-machine-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.admin-machine-list {
+  display: grid;
+  gap: 12px;
+  max-height: 570px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.admin-machine-row {
+  display: grid;
+  gap: 12px;
+  border-radius: 18px;
+  background: #f3f6f9;
+  padding: 16px;
+}
+
+.machine-main {
+  display: grid;
+  gap: 4px;
+}
+
+.machine-main strong {
+  color: #10213d;
+  font-size: 18px;
+}
+
+.machine-main span {
+  color: #6c7f96;
+  font-weight: 700;
+}
+
+.machine-tags,
+.machine-device-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.machine-tags span,
+.device-dot {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #60758f;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agent-pill-online,
+.device-dot-idle {
+  background: rgba(36, 194, 126, 0.16) !important;
+  color: #18895a !important;
+}
+
+.agent-pill-stale,
+.device-dot-occupied_unknown,
+.device-dot-unhealthy {
+  background: rgba(243, 91, 107, 0.14) !important;
+  color: #be4453 !important;
+}
+
+.agent-pill-waiting,
+.device-dot-unknown {
+  background: rgba(244, 181, 73, 0.18) !important;
+  color: #9b6412 !important;
+}
+
+.device-dot-platform_rented {
+  background: rgba(49, 92, 242, 0.12) !important;
+  color: #315cf2 !important;
+}
+
+.device-dot-disabled {
+  background: rgba(111, 126, 145, 0.14) !important;
+  color: #60758f !important;
 }
 
 .ranking-list,
@@ -1773,7 +1908,8 @@ button {
   .result-info-board,
   .filter-row,
   .machine-row-top,
-  .machine-row-body {
+  .machine-row-body,
+  .admin-machine-form {
     grid-template-columns: 1fr;
   }
 
