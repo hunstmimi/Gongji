@@ -54,6 +54,7 @@ def resolve_cors_origins() -> list[str]:
         defaults = [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
+            "http://10.26.6.117:5173",
         ]
     extras = [item.strip() for item in raw.split(",") if item.strip()]
     return list(dict.fromkeys(defaults + extras))
