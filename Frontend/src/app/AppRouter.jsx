@@ -5,6 +5,8 @@ import ResultPage from "../pages/ResultPage";
 import AuthPage from "../pages/AuthPage";
 import ProfilePage from "../pages/ProfilePage";
 import AdminPage from "../pages/AdminPage";
+import AdminMachinesPage from "../pages/AdminMachinesPage";
+import AdminUsagePage from "../pages/AdminUsagePage";
 import ProtectedRoute from "../components/layout/ProtectedRoute";
 
 export default function AppRouter() {
@@ -41,6 +43,22 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <AdminPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/machines"
+        element={
+          <ProtectedRoute>
+            <AdminMachinesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/usage"
+        element={
+          <ProtectedRoute>
+            <AdminUsagePage />
           </ProtectedRoute>
         }
       />

@@ -1511,10 +1511,133 @@ button {
 .admin-layout {
   position: relative;
   z-index: 1;
-  max-width: 1440px;
-  margin: 0 auto;
   display: grid;
   gap: 22px;
+}
+
+.admin-console-shell {
+  position: relative;
+  z-index: 1;
+  max-width: 1480px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.admin-sidebar {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(171, 187, 205, 0.32);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 44px rgba(104, 124, 148, 0.12);
+  padding: 18px;
+}
+
+.admin-sidebar-title {
+  display: grid;
+  gap: 4px;
+  padding: 6px 6px 10px;
+}
+
+.admin-sidebar-title strong {
+  color: #10213d;
+  font-size: 20px;
+}
+
+.admin-sidebar-title span {
+  color: #6c7f96;
+  font-weight: 700;
+}
+
+.admin-nav-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-nav-link {
+  display: grid;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 14px;
+  background: #f3f6f9;
+  color: #10213d;
+}
+
+.admin-nav-link strong,
+.admin-nav-link span {
+  display: block;
+}
+
+.admin-nav-link strong {
+  font-size: 16px;
+}
+
+.admin-nav-link span {
+  color: #6c7f96;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.admin-nav-link-active {
+  border-color: rgba(49, 92, 242, 0.28);
+  background: rgba(49, 92, 242, 0.1);
+}
+
+.admin-nav-link-active strong {
+  color: #315cf2;
+}
+
+.admin-workspace {
+  min-width: 0;
+}
+
+.admin-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-action-card {
+  display: grid;
+  gap: 10px;
+  min-height: 170px;
+  border: 1px solid rgba(171, 187, 205, 0.32);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 44px rgba(104, 124, 148, 0.12);
+  padding: 24px;
+}
+
+.admin-action-card span {
+  color: #6c7f96;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-action-card strong {
+  color: #10213d;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.admin-action-card p {
+  margin: 0;
+  color: #6c7f96;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.admin-action-primary {
+  background: linear-gradient(135deg, rgba(49, 92, 242, 0.12), rgba(36, 194, 126, 0.14)), rgba(255, 255, 255, 0.92);
 }
 
 .admin-summary-grid {
@@ -1988,9 +2111,15 @@ button {
   .network-stage,
   .profile-layout,
   .auth-layout,
+  .admin-console-shell,
   .admin-content-grid,
-  .admin-summary-grid {
+  .admin-summary-grid,
+  .admin-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar {
+    position: static;
   }
 }
 
