@@ -1,7 +1,24 @@
 from __future__ import annotations
 
+import math
+import re
+
 from ..db import connection_scope
 from ..seed import CARD_PRODUCTS, LOCATION_EDGES, LOCATION_LAYOUTS, get_preview_max
+
+
+AUTO_LAYOUT_SLOTS = [
+    {"x_ratio": 0.18, "y_ratio": 0.22},
+    {"x_ratio": 0.42, "y_ratio": 0.16},
+    {"x_ratio": 0.68, "y_ratio": 0.58},
+    {"x_ratio": 0.84, "y_ratio": 0.34},
+    {"x_ratio": 0.22, "y_ratio": 0.68},
+    {"x_ratio": 0.48, "y_ratio": 0.76},
+    {"x_ratio": 0.72, "y_ratio": 0.18},
+    {"x_ratio": 0.90, "y_ratio": 0.68},
+    {"x_ratio": 0.10, "y_ratio": 0.46},
+    {"x_ratio": 0.56, "y_ratio": 0.40},
+]
 
 
 def _node_status(available_cards: int, rented_cabinets: int, total_cabinets: int) -> str:
@@ -20,6 +37,60 @@ def _memory_gb(card_type: str, cards: int, reported_mb: int | float | None) -> f
     digits = "".join(ch for ch in raw_vram if ch.isdigit() or ch == ".")
     per_card = float(digits) if digits else 0.0
     return round(per_card * cards, 1)
+
+
+def _location_sort_key(location: str) -> tuple[str, int, str]:
+    match = re.search(r"(\d+)$", location)
+    if not match:
+        return (location, 10**9, location)
+    return (location[: match.start()], int(match.group(1)), location)
+
+
+def _fallback_grid_layout(index: int, total: int) -> dict:
+    columns = max(1, min(5, math.ceil(math.sqrt(total))))
+    rows = math.ceil(total / columns)
+    column = index % columns
+    row = index // columns
+    x_ratio = 0.12 if columns == 1 else 0.12 + (0.76 * column / (columns - 1))
+    y_ratio = 0.22 if rows == 1 else 0.18 + (0.62 * row / (rows - 1))
+    if row % 2 == 1 and columns > 1:
+        x_ratio = min(0.90, x_ratio + 0.06)
+    return {"x_ratio": round(x_ratio, 3), "y_ratio": round(y_ratio, 3)}
+
+
+def _build_layouts(locations: list[str]) -> dict[str, dict]:
+    layouts: dict[str, dict] = {}
+    total = len(locations)
+    for index, location in enumerate(locations):
+        if index < len(AUTO_LAYOUT_SLOTS):
+            layouts[location] = AUTO_LAYOUT_SLOTS[index]
+        else:
+            layouts[location] = _fallback_grid_layout(index, total)
+    return layouts
+
+
+def _build_edges(locations: list[str]) -> list[dict]:
+    location_set = set(locations)
+    edges: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for edge in LOCATION_EDGES:
+        left = edge["from"]
+        right = edge["to"]
+        if left not in location_set or right not in location_set:
+            continue
+        key = (left, right)
+        edges.append({"from": left, "to": right})
+        seen.add(key)
+    for index in range(1, len(locations)):
+        left = locations[index - 1]
+        right = locations[index]
+        key = (left, right)
+        reverse_key = (right, left)
+        if key in seen or reverse_key in seen:
+            continue
+        edges.append({"from": left, "to": right})
+        seen.add(key)
+    return edges
 
 
 def get_locations_summary() -> dict:
@@ -69,10 +140,12 @@ def get_locations_summary() -> dict:
         grouped.setdefault(row["location"], []).append(row)
 
     items = []
-    ordered_locations = list(dict.fromkeys([*LOCATION_LAYOUTS.keys(), *grouped.keys()]))
+    dynamic_locations = sorted((location for location in grouped if location not in LOCATION_LAYOUTS), key=_location_sort_key)
+    ordered_locations = list(dict.fromkeys([*LOCATION_LAYOUTS.keys(), *dynamic_locations]))
+    layouts = _build_layouts(ordered_locations)
     for location in ordered_locations:
         breakdown_rows = grouped.get(location, [])
-        layout = LOCATION_LAYOUTS.get(location, {"x_ratio": 0.5, "y_ratio": 0.5})
+        layout = layouts[location]
         total_cabinets = sum(int(row["total_cabinets"] or 0) for row in breakdown_rows)
         rentable_cabinets = sum(int(row["rentable_cabinets"] or 0) for row in breakdown_rows)
         online_available_cabinets = sum(int(row["online_available_cabinets"] or 0) for row in breakdown_rows)
@@ -148,4 +221,4 @@ def get_locations_summary() -> dict:
             }
         )
 
-    return {"items": items, "edges": LOCATION_EDGES}
+    return {"items": items, "edges": _build_edges(ordered_locations)}

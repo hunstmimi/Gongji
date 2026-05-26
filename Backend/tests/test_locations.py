@@ -64,3 +64,37 @@ def test_locations_summary_breakdown_contains_expected_machine_types(client):
     assert sum(entry["available_cards"] for entry in location_four_breakdown) == 4
     assert sum(entry["managed_cards"] for entry in location_four_breakdown) == 4
     assert sum(entry["total_cards"] for entry in location_four_breakdown) == 8
+
+
+def test_locations_summary_auto_adds_new_location_node(client):
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "Admin@2026"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    created = client.post(
+        "/api/admin/machines",
+        headers=headers,
+        json={
+            "cabinet_code": "10.20.12.240-4090",
+            "location": "位置5",
+            "host_ip": "10.20.12.240",
+            "ssh_port": 22,
+            "card_type": "4090",
+            "cabinet_type": "单卡机柜",
+            "capacity_cards": 1,
+            "day_hourly_power_cost": 2.4,
+            "night_hourly_power_cost": 2.0,
+        },
+    )
+    assert created.status_code == 200
+
+    response = client.get("/api/locations/summary")
+    data = response.json()
+    items = {item["location"]: item for item in data["items"]}
+
+    assert "位置5" in items
+    assert items["位置5"]["total_cabinets"] == 1
+    assert items["位置5"]["x_ratio"] != 0.5
+    assert items["位置5"]["y_ratio"] != 0.5
+    assert any(edge["from"] == "位置4" and edge["to"] == "位置5" for edge in data["edges"])
